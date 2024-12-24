@@ -1,0 +1,70 @@
+.calendar-month {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+}
+
+.calendar-month .calendar-year-month-label {
+    grid-column: 1 / span 7;
+    text-align: right;
+    margin: 20px 0;
+    padding: 8px 0;
+    border-top: 1px solid black;
+    border-bottom: 1px solid black
+}
+
+.calendar-month .calendar-year-month-label div {
+    display: inline-block;
+}
+
+.calendar-month .calendar-year-month-label .calendar-month-label {
+    font-size: 48px;
+    margin: 0 160px;
+}
+
+.calendar-month .calendar-year-month-label .calendar-year-label {
+    font-size: 48px;
+}
+
+.calendar-month div:nth-child(7n + 8) {
+    border-right: 1px solid black;
+}
+
+.calendar-month .calendar-month-day.even-week {
+    background-color: lightgrey;
+}
+
+.calendar-month-day {
+    min-height: 160px;
+    width: 100%;
+    position: relative;
+    border-left: 1px solid black;
+    border-bottom: 1px solid black;
+}
+
+.calendar-weekday-label {
+    width: 100%;
+    text-align: center;
+    background-color: navy;
+    border-left: 1px solid black;
+    border-top: 1px solid black;
+    border-bottom: 1px solid black;
+    color: white;
+    padding: 0.25em 0;
+}
+
+.calendar-weekday-label.sunday {
+    background-color: darkgrey;
+}
+
+.calendar-weekday-label.saturday {
+    background-color: darkgrey;
+}
+
+.calendar-month-day-of-week {
+    position: absolute;
+    display: inline-block;
+    top: 4px;
+    right: 4px;
+    left: auto;
+    font-size: 20px;
+}
