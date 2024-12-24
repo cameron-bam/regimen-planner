@@ -1,6 +1,15 @@
 (ns time
-  (:require [tick.core :as t]
-            [clojure.math :as math]))
+  (:require [tick.core :as t]))
+
+(def days-of-week [#time/day-of-week "SUNDAY"
+                   #time/day-of-week "MONDAY"
+                   #time/day-of-week "TUESDAY"
+                   #time/day-of-week "WEDNESDAY"
+                   #time/day-of-week "THURSDAY"
+                   #time/day-of-week "FRIDAY"
+                   #time/day-of-week "SATURDAY"])
+
+(def weekday? (set days-of-week))
 
 (defn ->days [start duration]
   (when start
@@ -11,30 +20,38 @@
         (recur (conj dates (t/>> cur #time/period "P1D"))
                (dec remaining))))))
 
-(defn days-between [start-date end-date]
-  (loop [cur start-date
-         dates []]
-    (if (t/>= cur end-date)
-      dates
-      (recur (t/>> cur #time/period "P1D") (conj dates cur)))))
+(defn index-of [coll val]
+  (first (keep-indexed (fn [i v] (when (= val v) i)) coll)))
 
-(defn days-in-month
-  ([date] (apply days-in-month ((juxt t/year t/month) (t/date date))))
-  ([year month]
-   (let [start (t/new-date year month 1)]
-     (days-between start (t/>> start #time/period "P1M")))))
+(defn period-of-weekdays [start end]
+  (when-not (every? weekday? [start end])
+    (throw (ex-info (str `period-of-weekdays " only supports #time/day-of-week") {})))
+  (t/new-period (mod (apply - (map (partial index-of days-of-week) [end start])) 7) :days))
 
-(defn get-next-weekday [date weekday]
-  (loop [cur date]
-    (if (= weekday (t/day-of-week cur))
-      cur
-      (recur (t/>> cur #time/period "P1D")))))
+(defn ->dates [start end]
+  (->> (cond
+         (every? t/date? [start end])
+         [start end]
 
-(defn get-previous-weekday [date weekday]
-  (loop [cur date]
-    (if (= weekday (t/day-of-week cur))
-      cur
-      (recur (t/<< cur #time/period "P1D")))))
+         (and (t/date? start)
+              (t/period? end))
+         [start (t/>> start end)]
 
-(defn week-of-month [date]
-  (inc (math/floor-div (dec (t/day-of-month date)) 7)))
+         (some weekday? [start end])
+         (let [period (->> [start end]
+                           (map t/day-of-week)
+                           (apply period-of-weekdays))]
+           [(if (weekday? start) (t/<< end period) start)
+            (if (weekday? end) (t/>> start period) end)])
+
+         :else
+         (throw (ex-info (str `->dates " doesn't support input arguments") {:start start :end end})))
+       (map t/date)))
+
+(defn date-range [start end period]
+  (let [[start end] (->dates start end)]
+    (loop [cur start
+           dates []]
+      (if (t/>= cur end)
+        dates
+        (recur (t/>> cur period) (conj dates cur))))))

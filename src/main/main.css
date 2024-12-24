@@ -1,3 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+}
+
 .calendar-month {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -67,4 +75,12 @@
     right: 4px;
     left: auto;
     font-size: 20px;
+}
+
+.parent-hover-visible {
+    visibility: hidden;
+}
+
+.hover-target:hover .parent-hover-visible {
+    visibility: visible;
 }
