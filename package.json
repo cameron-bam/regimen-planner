@@ -23,6 +23,8 @@
   },
   "scripts": {
     "postcss:watch": "cross-env postcss src/main/main.css -o ./public/css/main.css --verbose -w",
-    "postcss:release": "cross-env postcss src/main/main.css -o ./public/css/main.css --verbose"
+    "postcss:release": "cross-env postcss src/main/main.css -o ./public/css/main.css --verbose",
+    "shadow-cljs:release": "shadow-cljs release :frontend",
+    "release": "npm run shadow-cljs:release && npm run postcss:release"
   }
 }
