@@ -49,9 +49,9 @@
                   :date])
 
 (defmethod render-state-tag :state-tag/treatment-names [_ state _]
-  (into [""] (comp (filter (comp #{:treatment} :type))
-                   (map (comp :treatment :event))
-                   (filter (complement str/blank?))) (:events state)))
+  (into [{:value "" :display "None Selected"}]
+        (comp (filter (comp #{:treatment} :type))
+              (map #(hash-map :value (-> % meta :id) :display (-> % :event :treatment)))) (:events state)))
 
 (defmethod render-state-tag :state-tag/has-related-treatment? [_ _ event]
   (-> event :related-treatment :value str/blank? not))
@@ -79,7 +79,7 @@
                           (cond-> item
                             (and
                              (= :treatment (:type event))
-                             (= (-> item :event :related-treatment :value) (-> event :event :treatment)))
+                             (= (-> item :event :related-treatment :value) (-> event meta :id str)))
                             (assoc-in [:event :related-treatment :value] "")))))
        vec))
 
@@ -106,9 +106,7 @@
 
 (defn expand-relative-dates [events {:relative/keys [start stop] :as event}]
   (let [event (dissoc event :relative/start :relative/stop)
-        related-treatments (filter #(and (= :treatment (:type %))
-                                         (= (:treatment %)
-                                            (-> event :related-treatment :value))) events)]
+        related-treatments (filter #(= (str (-> % meta :id)) (-> event :related-treatment :value)) events)]
     (if (seq related-treatments)
       (mapcat (fn [{% :date}]
                 (let [start (when-not (or (nil? %) (:hidden? start)) (t/>> % (:value start)))

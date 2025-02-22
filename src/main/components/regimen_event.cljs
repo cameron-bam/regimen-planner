@@ -31,7 +31,9 @@
   [:label {:class label-classes}
    [:span {:class span-classes} (:label opts)]
    [:select (-> opts (assoc :class input-classes :on-change (partial regimen-input-on-change opts)) (dissoc :options))
-    (for [option (:options opts)] ^{:key option} [:option option])]])
+    (for [option (:options opts)]
+      (let [{:keys [display value]} (if (map? option) option {:display option :value option})]
+        ^{:key value} [:option {:value value} display]))]])
 
 (defmethod regimen-event-input "pill-selector" [{:keys [label on-change value]}]
   (r/with-let [pill-input (r/atom "")]
@@ -119,6 +121,10 @@
 
 (defmethod regimen-event-display "relative-time-period" [{:keys [label value]}]
   [:p [:span label] ": " [:span (relative-period->string value)]])
+
+(defmethod regimen-event-display "select" [{:keys [label value options]}]
+  (prn [value options])
+  [:p [:span label] ": " [:span (or (some #(when (= (str value) (str (:value %))) (:display %)) options) value)]])
 
 (defmulti render-state-tag (fn [val _ _] val))
 
