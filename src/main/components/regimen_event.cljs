@@ -13,29 +13,30 @@
 (def label-classes "block pt-4")
 (def span-classes "text-700")
 
-(defmulti regimen-event-input (fn [{:keys [type]} & _] type))
+(defn regimen-input-on-change [opts event]
+  (let [value (-> event .-target .-value)
+        validator (or (:validator opts) (constantly true))]
+    (when-let [on-change (:on-change opts)]
+      (when (validator value)
+        (on-change value)))))
+
+(defmulti regimen-event-input (fn [{:keys [type]} & _] (name type)))
 
 (defmethod regimen-event-input :default [opts]
-  (let [on-change #(let [value (-> % .-target .-value)]
-                     (when-let [on-change (:on-change opts)]
-                       (on-change value)))]
-    [:label {:class label-classes}
-     [:span {:class span-classes} (str/capitalize (:name opts))]
-     [:input (assoc opts :class input-classes :on-change on-change)]]))
+  [:label {:class label-classes}
+   [:span {:class span-classes} (:label opts)]
+   [:input (assoc opts :class input-classes :on-change (partial regimen-input-on-change opts))]])
 
-(defmethod regimen-event-input :select [opts]
-  (let [on-change #(let [value (-> % .-target .-value)]
-                     (when-let [on-change (:on-change opts)]
-                       (on-change value)))]
-    [:label {:class label-classes}
-     [:span {:class span-classes} (str/capitalize (:name opts))]
-     [:select (-> opts (assoc :class input-classes :on-change on-change) (dissoc :options))
-      (for [option (:options opts)] ^{:key option} [:option option])]]))
+(defmethod regimen-event-input "select" [opts]
+  [:label {:class label-classes}
+   [:span {:class span-classes} (:label opts)]
+   [:select (-> opts (assoc :class input-classes :on-change (partial regimen-input-on-change opts)) (dissoc :options))
+    (for [option (:options opts)] ^{:key option} [:option option])]])
 
-(defmethod regimen-event-input :pill-selector [{:keys [name on-change value]}]
+(defmethod regimen-event-input "pill-selector" [{:keys [label on-change value]}]
   (r/with-let [pill-input (r/atom "")]
     [:label {:class label-classes}
-     [:span {:class span-classes} (str/capitalize name)]
+     [:span {:class span-classes} label]
      [:input {:class input-classes
               :name "pill-input"
               :value @pill-input
@@ -56,17 +57,35 @@
                    :on-click #(on-change (disj value item))}
             [:> XMarkIcon {:style {:height "1em" :display "inline-block"}}]]])])]))
 
-(defmethod regimen-event-input "relative-time-period" [{:keys [name on-change value]}]
+(defmethod regimen-event-input "time-period" [{:keys [label on-change value validator]}]
+  (r/with-let [period-value (r/atom (t/days value))]
+    (let [validator (or validator #(>= % 0))
+          inner-on-change #(on-change (t/new-period @period-value :days))]
+      [:label {:class label-classes}
+       [:span {:class span-classes} label]
+       [:div {:class "flex items-center"}
+        [:input {:class input-classes
+                 :type "number"
+                 :on-change #(let [value (-> % .-target .-value int)]
+                               (when (validator value)
+                                 (reset! period-value value)
+                                 (inner-on-change)))
+                 :value @period-value}]
+        [:span {:class "px-2 grow"} "days"]]])))
+
+
+(defmethod regimen-event-input "relative-time-period" [{:keys [label on-change value validator]}]
   (r/with-let [period-value (r/atom {:days (abs (t/days value))
                                      :sign (if (> (t/days value) 0) "after" "before")})]
-    (let [inner-on-change #(on-change (t/new-period (* (:days @period-value) ({"after" 1 "before" -1} (:sign @period-value))) :days))]
+    (let [inner-on-change #(on-change (t/new-period (* (:days @period-value) ({"after" 1 "before" -1} (:sign @period-value))) :days))
+          validator (or validator #(>= % 0))]
       [:label {:class label-classes}
-       [:span {:class span-classes} (str/capitalize name)]
+       [:span {:class span-classes} label]
        [:div {:class "flex items-center"}
         [:input {:class input-classes
                  :type "number"
                  :on-change #(let [value (-> % .-target .-value)]
-                               (when (>= value 0)
+                               (when (validator value)
                                  (swap! period-value assoc :days (-> % .-target .-value))
                                  (inner-on-change)))
                  :value (:days @period-value)}]
@@ -79,19 +98,27 @@
          [:option "after"]
          [:option "before"]]]])))
 
-(defmulti regimen-event-display (fn [{:keys [type]} & _] type))
+(defmulti regimen-event-display (fn [{:keys [type]} & _] (name type)))
 
 (defn period->string [period]
   (let [days (t/days period)
         abs-days (abs days)]
-    (if (= 0 abs-days)
-      "day of treatment"
-      (str abs-days " day" (when (not= abs-days 1) "s") " " ({-1 "before" 1 "after"} (/ days abs-days))))))
+    (str days " day" (when (not= abs-days 1) "s"))))
 
-(defmethod regimen-event-display :default [{:keys [name value]}]
-  [:p [:span name] ": " [:span (str (cond->> value
-                                      (coll? value) (str/join ", ")
-                                      (t/period? value) period->string))]])
+(defn relative-period->string [period]
+  (let [days (t/days period)
+        abs-days (abs days)]
+    (if (= 0 days)
+      "day of treatment"
+      (str abs-days " day" (when (not= abs-days 1) "s") " " (if (< days 0) "before" "after")))))
+
+(defmethod regimen-event-display :default [{:keys [label value]}]
+  [:p [:span label] ": " [:span (str (cond->> value
+                                       (coll? value) (str/join ", ")
+                                       (t/period? value) period->string))]])
+
+(defmethod regimen-event-display "relative-time-period" [{:keys [label value]}]
+  [:p [:span label] ": " [:span (relative-period->string value)]])
 
 (defmulti render-state-tag (fn [val _ _] val))
 
@@ -137,14 +164,14 @@
         (into
          [:<>]
          (filter some?)
-         (for [[label field] (let [form-state* (render-state-tags @state! @form-state)]
-                               (map #(vector % (get form-state* %)) field-order))]
+         (for [[field-key field] (let [form-state* (render-state-tags @state! @form-state)]
+                                   (map #(vector % (get form-state* %)) field-order))]
            (let [type (cond
                         (map? field) (:type field)
                         (t/date? field) "date"
                         :else "text")
                  opts (cond-> {:type type
-                               :name (name label)}
+                               :label (str/replace (str/capitalize (name field-key)) #"-" " ")}
                         (map? field) (merge (dissoc field :hidden?))
                         (not (map? field)) (assoc :value field))]
              (when (and
@@ -152,10 +179,10 @@
                     (not (and (map? field) (:hidden? field))))
                (with-meta
                  (if editing?
-                   [regimen-event-input (assoc opts :on-change #(swap! form-state update label (fn [old-val new-val]
-                                                                                                 (cond->> new-val
-                                                                                                   (= "date" type) t/date
-                                                                                                   (map? old-val) (assoc old-val :value)))
+                   [regimen-event-input (assoc opts :on-change #(swap! form-state update field-key (fn [old-val new-val]
+                                                                                                     (cond->> new-val
+                                                                                                       (= "date" type) t/date
+                                                                                                       (map? old-val) (assoc old-val :value)))
                                                                        %))]
                    [:li [regimen-event-display opts]])
-                 {:key label})))))]])))
+                 {:key field-key})))))]])))

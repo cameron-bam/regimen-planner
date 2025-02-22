@@ -48,10 +48,8 @@
          (throw (ex-info (str `->dates " doesn't support input arguments") {:start start :end end})))
        (map t/date)))
 
+(defn date-seq [start period]
+  (iterate #(t/>> % period) start))
+
 (defn date-range [start end period]
-  (let [[start end] (->dates start end)]
-    (loop [cur start
-           dates []]
-      (if (t/>= cur end)
-        dates
-        (recur (t/>> cur period) (conj dates cur))))))
+  (take-while #(t/< % end) (date-seq start period)))

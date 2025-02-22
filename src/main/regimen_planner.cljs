@@ -1,15 +1,18 @@
 (ns regimen-planner
   (:require
-   ["@heroicons/react/16/solid" :refer [ArrowsPointingOutIcon ArrowsPointingInIcon]]
+   ["@heroicons/react/16/solid" :refer [ArrowsPointingInIcon
+                                        ArrowsPointingOutIcon]]
    ["react-dom/client" :refer [createRoot]]
-   [components.calendar :refer [calendar-month]]
-   [components.regimen-event :refer [regimen-event-form render-state-tags render-state-tag form-classes label-classes span-classes]]
-   [components :refer [plus-selector sortable-list]]
    [clojure.string :as str]
+   [components :refer [plus-selector sortable-list]]
+   [components.calendar :refer [calendar-month]]
+   [components.regimen-event :refer [form-classes label-classes
+                                     regimen-event-form render-state-tag
+                                     render-state-tags span-classes]]
    [reagent.core :as r]
    [state :refer [state!]]
    [tick.core :as t]
-   [time :refer [date-range]]))
+   [time :refer [date-range date-seq]]))
 
 (def default-events {:medication
                      {:type :medication
@@ -23,7 +26,12 @@
                               :relative/stop {:type "relative-time-period" :value #time/period "P0D" :hidden? :state-tag/not-has-related-treatment?}}}
                      :treatment
                      {:type :treatment
-                      :event {:treatment "" :date (t/date (t/now))}
+                      :event {:treatment ""
+                              :start (t/date (t/now))
+                              :occurrences {:type :number
+                                            :value 1}
+                              :frequency {:type :time-period
+                                          :value #time/period "P14D"}}
                       :editing? true}})
 
 (def field-order [:rx
@@ -35,6 +43,9 @@
                   :relative/stop
 
                   :treatment
+                  :start
+                  :occurrences
+                  :frequency
                   :date])
 
 (defmethod render-state-tag :state-tag/treatment-names [_ state _]
@@ -47,6 +58,9 @@
 
 (defmethod render-state-tag :state-tag/not-has-related-treatment? [_ _ event]
   (-> event :related-treatment :value str/blank?))
+
+(defmethod render-state-tag :state-tag/multiple-occurrences? [_ _ event]
+  (-> event :occurrences :value int (<= 1)))
 
 (defn rebuild-timings! [state]
   (let [new-timings (->> state
@@ -69,6 +83,12 @@
                             (assoc-in [:event :related-treatment :value] "")))))
        vec))
 
+(defn expand-treatments [{:keys [type occurrences start frequency] :as event}]
+  (let [event (dissoc event occurrences start frequency)]
+    (if (not= :treatment type)
+      [event]
+      (mapv #(assoc event :date %) (take (int (:value occurrences)) (date-seq start (:value frequency)))))))
+
 (defn expand-timing [event]
   (if-let [timing (seq (:value (:timing event)))]
     (mapv #(assoc event :timing %) timing)
@@ -86,32 +106,38 @@
 
 (defn expand-relative-dates [events {:relative/keys [start stop] :as event}]
   (let [event (dissoc event :relative/start :relative/stop)
-        treatment-date (some #(when (and (= :treatment (:type %))
+        related-treatments (filter #(and (= :treatment (:type %))
                                          (= (:treatment %)
-                                            (-> event :related-treatment :value)))
-                                (:date %)) events)
-        start (when-not (or (nil? treatment-date) (:hidden? start)) (t/>> treatment-date (:value start)))
-        stop (when-not (or (nil? treatment-date) (:hidden? stop)) (t/>> treatment-date (:value stop)))]
-    (cond
-      (and start stop) (mapv #(assoc event :date %) (date-range start (t/>> stop #time/period "P1D") #time/period "P1D"))
-      start [(assoc event :date start)]
-      stop [(assoc event :date stop)]
-      :else [event])))
+                                            (-> event :related-treatment :value))) events)]
+    (if (seq related-treatments)
+      (mapcat (fn [{% :date}]
+                (let [start (when-not (or (nil? %) (:hidden? start)) (t/>> % (:value start)))
+                      stop (when-not (or (nil? %) (:hidden? stop)) (t/>> % (:value stop)))]
+                  (prn [% start stop])
+                  (cond
+                    (and start stop) (mapv (fn [%] (assoc event :date %)) (date-range start (t/>> stop #time/period "P1D") #time/period "P1D"))
+                    start [(assoc event :date start)]
+                    stop [(assoc event :date stop)]
+                    :else [event]))) related-treatments)
+      [event])))
 
-(defn expand-event [events event]
-  (->> [event]
-       (mapcat expand-timing)
-       (mapcat expand-exact-dates)
-       (mapcat (partial expand-relative-dates events))
-       (filter :date)
-       vec))
+(defn expand-medications [events event]
+  (if (= :medication (:type event))
+    (->> [event]
+         (mapcat expand-timing)
+         (mapcat expand-exact-dates)
+         (mapcat (partial expand-relative-dates events))
+         (filter :date)
+         vec)
+    [event]))
 
 (defn expand-events []
   (let [events (->> @state!
                     :events
                     (map #(update % :event (partial render-state-tags @state!)))
-                    (map #(merge % (:event %))))]
-    (mapcat (partial expand-event events) events)))
+                    (map #(merge % (:event %)))
+                    (mapcat expand-treatments))]
+    (mapcat (partial expand-medications events) events)))
 
 (defn date-renderer [{:keys [title events timing-order]}]
   (let [event-groups (group-by :timing events)]
