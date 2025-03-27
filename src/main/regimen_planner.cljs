@@ -140,14 +140,14 @@
 (defn date-renderer [{:keys [title events timing-order]}]
   (let [event-groups (group-by :timing events)]
     [:div {:class "p-2"}
-     [:p {:class "pb-2.5 pr-4 font-medium"} (or title [:br])]
+     [:p {:class "pt-1 pb-3.5 pr-4 font-bold leading-none"} (or title [:br])]
      (when events
        (into [:div {:class "event-list"}]
              (comp
               (keep #(when-let [events (get event-groups %)] [% events]))
               (map (fn [[timing events]]
-                     (into [:<> (when timing [:p {:class "mt-3 mb-1"} timing ":"])]
-                           (map (fn [{:keys [rx]}] [:p {:class "my-1"} rx]))
+                     (into [:section {:class "mb-3"} (when timing [:p {:class "font-medium mb-0.5 leading-none"} (str (str/trim timing) ":")])]
+                           (map (fn [{:keys [rx]}] [:p {:class "mt-0 mb-0.5 ml-0.5 leading-none"} rx]))
                            events))))
              timing-order))]))
 
@@ -197,7 +197,7 @@
 
    [:div {:class (str "hover-target h-full relative " (when-not (:full-screen? @state!) "overflow-scroll"))}
     [:button {:on-click #(swap! state! update :full-screen? not)
-              :class "hover:bg-gray-300 parent-hover-visible absolute flex rounded-full justify-center items-center" ;; rounded-full
+              :class "hover:bg-gray-300 parent-hover-visible absolute flex rounded-full justify-center items-center print-hidden" ;; rounded-full
               :style {:height "30px" :width "30px" :top "5px" :right "5px"}}
      [:> (if (:full-screen? @state!) ArrowsPointingInIcon ArrowsPointingOutIcon) {:style {:height "60%" :width "60%"}}]]
     (let [date-data (when-let [events (seq (expand-events))]

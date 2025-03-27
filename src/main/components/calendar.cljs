@@ -57,7 +57,7 @@
   [{:keys [date-data date-renderer year-month] :or {date-data {}}}]
   (let [year-month (or year-month (pick-year-month date-data) (t/year-month))
         multiple-months? (some #(not= year-month (t/year-month %)) (keys date-data))]
-    (-> [:div {:class "calendar-month"}
+    (-> [:div {:class "calendar-month page-break-after"}
          [calendar-year-month-label year-month]]
         (into (map (fn [day-of-week] [calendar-weekday-label day-of-week])) days-of-week)
         (into
