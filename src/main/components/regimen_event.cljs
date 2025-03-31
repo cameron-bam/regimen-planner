@@ -27,6 +27,11 @@
    [:span {:class span-classes} (:label opts)]
    [:input (assoc opts :class input-classes :on-change (partial regimen-input-on-change opts))]])
 
+(defmethod regimen-event-input "textarea" [opts]
+  [:label {:class label-classes}
+   [:span {:class span-classes} (:label opts)]
+   [:textarea (assoc opts :class input-classes :on-change (partial regimen-input-on-change opts))]])
+
 (defmethod regimen-event-input "select" [opts]
   [:label {:class label-classes}
    [:span {:class span-classes} (:label opts)]

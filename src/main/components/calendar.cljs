@@ -54,19 +54,26 @@
          ffirst)))
 
 (defn calendar-month
-  [{:keys [date-data date-renderer year-month] :or {date-data {}}}]
+  [{:keys [date-data date-renderer year-month footnotes] :or {date-data {}
+                                                              footnotes []}}]
   (let [year-month (or year-month (pick-year-month date-data) (t/year-month))
         multiple-months? (some #(not= year-month (t/year-month %)) (keys date-data))]
-    (-> [:div {:class "calendar-month page-break-after"}
-         [calendar-year-month-label year-month]]
-        (into (map (fn [day-of-week] [calendar-weekday-label day-of-week])) days-of-week)
-        (into
-         (comp
-          (map-indexed vector)
-          (map (fn [[i date]] ^{:key date} [calendar-day {:date date
-                                                          :week (math/floor-div i 7)
-                                                          :year-month year-month
-                                                          :date-data (get date-data date)
-                                                          :multiple-months? multiple-months?
-                                                          :date-renderer date-renderer}])))
-         (get-calendar-days {:year-month year-month :date-data date-data})))))
+    [:div {:class "page-break-after"}
+     (-> [:div {:class "calendar-month"}
+          [calendar-year-month-label year-month]]
+         (into (map (fn [day-of-week] [calendar-weekday-label day-of-week])) days-of-week)
+         (into
+          (comp
+           (map-indexed vector)
+           (map (fn [[i date]] ^{:key date} [calendar-day {:date date
+                                                           :week (math/floor-div i 7)
+                                                           :year-month year-month
+                                                           :date-data (get date-data date)
+                                                           :multiple-months? multiple-months?
+                                                           :date-renderer date-renderer}])))
+          (get-calendar-days {:year-month year-month :date-data date-data})))
+     (into [:div {:class "pt-2"}] (map-indexed (fn [ix item]
+                                                 ^{:key ix} [:p {:class ""}
+                                                             [:span {:class "font-bold"} (apply str (take (inc ix) (repeat "*")))]
+                                                             " "
+                                                             item]) footnotes))]))

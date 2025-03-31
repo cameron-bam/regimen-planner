@@ -32,7 +32,12 @@
                                             :value 1}
                               :frequency {:type :time-period
                                           :value #time/period "P14D"}}
-                      :editing? true}})
+                      :editing? true}
+                     :footnote
+                     {:type :footnote
+                      :editing? true
+                      :event {:footnote {:type :textarea
+                                         :value ""}}}})
 
 (def field-order [:rx
                   :timing
@@ -41,7 +46,7 @@
                   :exact/stop
                   :relative/start
                   :relative/stop
-
+                  :footnote
                   :treatment
                   :start
                   :occurrences
@@ -192,7 +197,9 @@
         {:value "Add Treatment"
          :on-click #(swap! state! update :events conj (with-meta (:treatment default-events) {:id (random-uuid)}))}
         {:value "Add Medication"
-         :on-click #(swap! state! update :events conj (with-meta (:medication default-events) {:id (random-uuid)}))}]]])
+         :on-click #(swap! state! update :events conj (with-meta (:medication default-events) {:id (random-uuid)}))}
+        {:value "Add Footnote"
+         :on-click #(swap! state! update :events conj (with-meta (:footnote default-events) {:id (random-uuid)}))}]]])
 
 
    [:div {:class (str "hover-target h-full relative " (when-not (:full-screen? @state!) "overflow-scroll"))}
@@ -200,16 +207,20 @@
               :class "hover:bg-gray-300 parent-hover-visible absolute flex rounded-full justify-center items-center print-hidden" ;; rounded-full
               :style {:height "30px" :width "30px" :top "5px" :right "5px"}}
      [:> (if (:full-screen? @state!) ArrowsPointingInIcon ArrowsPointingOutIcon) {:style {:height "60%" :width "60%"}}]]
-    (let [date-data (when-let [events (seq (expand-events))]
-                      (group-by (comp t/year-month first)
-                                (reduce (fn [acc {:keys [date] :as event}]
-                                          (case (:type event)
-                                            :medication (if (get-in acc [date :events])
-                                                          (update-in acc [date :events] conj event)
-                                                          (update acc date merge {:events [event] :timing-order (into [nil] (map :id) (-> @state! :timings))}))
-                                            :treatment (assoc-in acc [date :title] (:treatment event))))
-                                        {}
-                                        events)))]
+    (let [[date-data footnotes] (when-let [events (seq (expand-events))]
+                                  [(group-by (comp t/year-month first)
+                                             (reduce (fn [acc {:keys [date] :as event}]
+                                                       (case (:type event)
+                                                         :medication (if (get-in acc [date :events])
+                                                                       (update-in acc [date :events] conj event)
+                                                                       (update acc date merge {:events [event] :timing-order (into [nil] (map :id) (-> @state! :timings))}))
+                                                         :treatment (assoc-in acc [date :title] (:treatment event))
+                                                         acc))
+                                                     {}
+                                                     events))
+                                   (->> events
+                                        (filter (comp #{:footnote} :type))
+                                        (map #(get-in % [:event :footnote :value])))])]
       [:<>
        [:div {:class "p-12"}
         (if date-data
@@ -217,7 +228,8 @@
                 (map-indexed
                  (fn [i [_ events]]
                    ^{:key i} [calendar-month {:date-renderer date-renderer
-                                              :date-data (into {} events)}]))
+                                              :date-data (into {} events)
+                                              :footnotes footnotes}]))
                 (sort-by first date-data))
           [calendar-month])]])]))
 
