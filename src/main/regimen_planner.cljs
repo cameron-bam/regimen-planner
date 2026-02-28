@@ -31,7 +31,8 @@
                               :occurrences {:type :number
                                             :value 1}
                               :frequency {:type :time-period
-                                          :value #time/period "P14D"}}
+                                          :value #time/period "P14D"}
+                              :date-overrides {}}
                       :editing? true}
                      :footnote
                      {:type :footnote
@@ -88,11 +89,36 @@
                             (assoc-in [:event :related-treatment :value] "")))))
        vec))
 
-(defn expand-treatments [{:keys [type occurrences start frequency] :as event}]
-  (let [event (dissoc event occurrences start frequency)]
+(defn override-treatment-date! [treatment-id occurrence-index new-date]
+  (swap! state! update :events
+         (fn [events]
+           (mapv (fn [event]
+                   (if (= (-> event meta :id) treatment-id)
+                     (assoc-in event [:event :date-overrides occurrence-index] new-date)
+                     event))
+                 events))))
+
+(defn reset-treatment-date! [treatment-id occurrence-index]
+  (swap! state! update :events
+         (fn [events]
+           (mapv (fn [event]
+                   (if (= (-> event meta :id) treatment-id)
+                     (update-in event [:event :date-overrides] dissoc occurrence-index)
+                     event))
+                 events))))
+
+(defn expand-treatments [{:keys [type occurrences start frequency date-overrides] :as event}]
+  (let [treatment-id (:treatment-id event)
+        event (dissoc event :occurrences :start :frequency :date-overrides)]
     (if (not= :treatment type)
       [event]
-      (mapv #(assoc event :date %) (take (int (:value occurrences)) (date-seq start (:value frequency)))))))
+      (mapv (fn [idx computed-date]
+              (assoc event
+                     :date (get date-overrides idx computed-date)
+                     :occurrence-index idx
+                     :treatment-id treatment-id))
+            (range)
+            (take (int (:value occurrences)) (date-seq start (:value frequency)))))))
 
 (defn expand-timing [event]
   (if-let [timing (seq (:value (:timing event)))]
@@ -138,23 +164,46 @@
   (let [events (->> @state!
                     :events
                     (map #(update % :event (partial render-state-tags @state!)))
-                    (map #(merge % (:event %)))
+                    (map (fn [event] (assoc (merge event (:event event))
+                                            :treatment-id (-> event meta :id))))
                     (mapcat expand-treatments))]
     (mapcat (partial expand-medications events) events)))
 
-(defn date-renderer [{:keys [title events timing-order]}]
-  (let [event-groups (group-by :timing events)]
-    [:div {:class "p-2"}
-     [:p {:class "pt-1 pb-3.5 pr-4 font-bold leading-none"} (or title [:br])]
-     (when events
-       (into [:div {:class "event-list"}]
-             (comp
-              (keep #(when-let [events (get event-groups %)] [% events]))
-              (map (fn [[timing events]]
-                     (into [:section {:class "mb-3"} (when timing [:p {:class "font-medium mb-0.5 leading-none"} (str (str/trim timing) ":")])]
-                           (map (fn [{:keys [rx]}] [:p {:class "mt-0 mb-0.5 ml-0.5 leading-none"} rx]))
-                           events))))
-             timing-order))]))
+(defn date-renderer [{:keys [title events timing-order treatment-id occurrence-index date]}]
+  (r/with-let [editing-date? (r/atom false)]
+    (let [event-groups (group-by :timing events)]
+      [:div {:class "p-2"}
+       [:div {:class "pt-1 pb-3.5 pr-4 font-bold leading-none"}
+        (if (and title treatment-id)
+          [:div
+           [:span {:class "cursor-pointer hover:underline"
+                   :on-click #(reset! editing-date? true)}
+            title]
+           (when @editing-date?
+             [:div {:class "print-hidden mt-1"}
+              [:input {:type "date"
+                       :value (str date)
+                       :class "text-sm rounded border-gray-300"
+                       :on-change (fn [e]
+                                    (let [new-date (t/date (-> e .-target .-value))]
+                                      (override-treatment-date! treatment-id occurrence-index new-date)
+                                      (reset! editing-date? false)))}]
+              [:button {:class "text-xs ml-1 text-gray-500 hover:text-red-500"
+                        :on-click (fn [e]
+                                    (.stopPropagation e)
+                                    (reset-treatment-date! treatment-id occurrence-index)
+                                    (reset! editing-date? false))}
+               "Reset"]])]
+          (or title [:br]))]
+       (when events
+         (into [:div {:class "event-list"}]
+               (comp
+                (keep #(when-let [events (get event-groups %)] [% events]))
+                (map (fn [[timing events]]
+                       (into [:section {:class "mb-3"} (when timing [:p {:class "font-medium mb-0.5 leading-none"} (str (str/trim timing) ":")])]
+                             (map (fn [{:keys [rx]}] [:p {:class "mt-0 mb-0.5 ml-0.5 leading-none"} rx]))
+                             events))))
+               timing-order))])))
 
 (defn main []
   (conj
@@ -186,8 +235,20 @@
             (merge
              event
              {:toggle-edit #(swap-state! update :editing? not)
-              :on-change (fn [event]
-                           (swap-state! update :event merge event)
+              :on-change (fn [new-event]
+                           (swap-state! (fn [old-event]
+                                          (let [old (:event old-event)
+                                                series-changed? (and (= :treatment (:type old-event))
+                                                                     (or (not= (:start old) (:start new-event))
+                                                                         (not= (:occurrences old) (:occurrences new-event))
+                                                                         (not= (:frequency old) (:frequency new-event))))
+                                                has-overrides? (seq (:date-overrides old))
+                                                clear-overrides? (and series-changed?
+                                                                      (or (not has-overrides?)
+                                                                          (js/confirm "Treatment schedule changed. Clear manual date overrides?")))]
+                                            (update old-event :event merge
+                                                    (when (or (not series-changed?) clear-overrides?) new-event)
+                                                    (when clear-overrides? {:date-overrides {}})))))
                            (swap! state! rebuild-timings!))
               :drop-event! #(do
                               (swap! state! update :events remove-event event)
@@ -214,7 +275,10 @@
                                                          :medication (if (get-in acc [date :events])
                                                                        (update-in acc [date :events] conj event)
                                                                        (update acc date merge {:events [event] :timing-order (into [nil] (map :id) (-> @state! :timings))}))
-                                                         :treatment (assoc-in acc [date :title] (:treatment event))
+                                                         :treatment (update acc date merge {:title (:treatment event)
+                                                                                            :treatment-id (:treatment-id event)
+                                                                                            :occurrence-index (:occurrence-index event)
+                                                                                            :date date})
                                                          acc))
                                                      {}
                                                      events))
