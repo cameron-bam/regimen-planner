@@ -112,6 +112,8 @@ On page load the flow reverses: the URL hash is decoded from Base64, read throug
 
 Treatment events carry an additional `:date-overrides` field — a map from occurrence index (int) to `LocalDate` — that lets individual occurrences be rescheduled without changing the series parameters.
 
+A treatment's `:start` is a field map, `{:type "date" :value <LocalDate>}`, like the medication's `:exact/start`. Links saved before that hold a bare `LocalDate`; the form shows it as the same map and the next save stores the map. A date field map may carry `:open-to-date` (a date) for the month its calendar opens on; without it the calendar opens on today's month.
+
 State is persisted bidirectionally with the URL hash using Cognitect Transit (with custom handlers for `tick` date types) and Base64 encoding. A Reagent watcher updates the hash on every state change.
 
 ## Conditional Field Visibility

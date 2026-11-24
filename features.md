@@ -14,6 +14,7 @@ Regimen Planner is a web-based tool for building printable medication calendars.
 
 ### Treatments
 - Create treatment entries with a name and start date
+- The Start date picker opens on today's month, not the month of the saved start date, so a regimen reused from an old link is quick to re-date. Picking a date (today included) or typing one sets the start; closing the calendar without a choice keeps the saved date. Medication dates open on today's month too; a calendar day's override picker opens on that occurrence's month.
 - Define recurring treatments with a number of occurrences and a frequency interval (e.g., every 14 days)
 - Medications can be scheduled relative to treatment dates
 - **Per-occurrence date overrides**: click a treatment name in a calendar day cell to open an inline date picker and reschedule that single occurrence without affecting the rest of the series

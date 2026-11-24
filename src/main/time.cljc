@@ -48,6 +48,13 @@
          (throw (ex-info (str `->dates " doesn't support input arguments") {:start start :end end})))
        (map t/date)))
 
+(defn first-of-month [date]
+  (t/new-date (t/year date) (t/month date) 1))
+
+#?(:cljs
+   (defn ->js-date [date]
+     (-> date (t/at (t/midnight)) (t/in (t/zone)) t/inst)))
+
 (defn date-seq [start period]
   (iterate #(t/>> % period) start))
 

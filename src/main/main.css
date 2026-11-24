@@ -1,9 +1,26 @@
+@import "react-date-picker/dist/DatePicker.css";
+@import "react-calendar/dist/Calendar.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
     margin: 0;
+}
+
+.react-date-picker__wrapper {
+    border-color: rgb(209 213 219);
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    background-color: white;
+}
+
+.react-date-picker__inputGroup__input {
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background-color: transparent;
 }
 
 .calendar-month {

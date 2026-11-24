@@ -1,11 +1,14 @@
 (ns components.regimen-event
   (:require
    ["@heroicons/react/16/solid" :refer [CheckIcon PencilIcon TrashIcon XMarkIcon]]
+   ["react" :as react]
+   ["react-date-picker" :default DatePicker]
    [clojure.string :as str]
    [clojure.walk :refer [postwalk]]
    [state :refer [state!]]
    [reagent.core :as r]
-   [tick.core :as t]))
+   [tick.core :as t]
+   [time :refer [->js-date first-of-month]]))
 
 (def form-classes "px-5 pb-5 border-b border-gray-300 border-solid")
 (def display-classes "py-7 px-5 border-b border-gray-300 border-solid")
@@ -26,6 +29,31 @@
   [:label {:class label-classes}
    [:span {:class span-classes} (:label opts)]
    [:input (assoc opts :class input-classes :on-change (partial regimen-input-on-change opts))]])
+
+(defn- open-to-month [open-to-date]
+  (->js-date (first-of-month (if (or (nil? open-to-date) (= :today open-to-date))
+                               (t/date (t/now))
+                               (t/date open-to-date)))))
+
+(defn date-picker
+  [{:keys [value on-change validator open-to-date class]}]
+  (let [[active-start set-active-start!] (react/useState #(open-to-month open-to-date))]
+    [:> DatePicker
+     {:value (some-> value t/date ->js-date)
+      :className class
+      :clearIcon nil
+      :onCalendarOpen #(set-active-start! (open-to-month open-to-date))
+      :calendarProps #js {:activeStartDate active-start
+                          :onActiveStartDateChange #(set-active-start! (.-activeStartDate ^js %))}
+      :onChange #(when %
+                   (let [v (str (t/date %))]
+                     (when ((or validator (constantly true)) v)
+                       (on-change v))))}]))
+
+(defmethod regimen-event-input "date" [opts]
+  [:label {:class label-classes}
+   [:span {:class span-classes} (:label opts)]
+   [:f> date-picker (assoc opts :class input-classes)]])
 
 (defmethod regimen-event-input "textarea" [opts]
   [:label {:class label-classes}

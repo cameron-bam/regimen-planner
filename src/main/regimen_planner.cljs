@@ -6,7 +6,7 @@
    [clojure.string :as str]
    [components :refer [plus-selector sortable-list]]
    [components.calendar :refer [calendar-month]]
-   [components.regimen-event :refer [form-classes label-classes
+   [components.regimen-event :refer [date-picker form-classes label-classes
                                      regimen-event-form render-state-tag
                                      render-state-tags span-classes]]
    [reagent.core :as r]
@@ -27,7 +27,7 @@
                      :treatment
                      {:type :treatment
                       :event {:treatment ""
-                              :start (t/date (t/now))
+                              :start {:type "date" :value (t/date (t/now))}
                               :occurrences {:type :number
                                             :value 1}
                               :frequency {:type :time-period
@@ -53,6 +53,9 @@
                   :occurrences
                   :frequency
                   :date])
+
+(defn start-field [start]
+  (if (map? start) start {:type "date" :value start}))
 
 (defmethod render-state-tag :state-tag/treatment-names [_ state _]
   (into [{:value "" :display "None Selected"}]
@@ -118,7 +121,7 @@
                      :occurrence-index idx
                      :treatment-id treatment-id))
             (range)
-            (take (int (:value occurrences)) (date-seq start (:value frequency)))))))
+            (take (int (:value occurrences)) (date-seq (:value (start-field start)) (:value frequency)))))))
 
 (defn expand-timing [event]
   (if-let [timing (seq (:value (:timing event)))]
@@ -181,13 +184,12 @@
             title]
            (when @editing-date?
              [:div {:class "print-hidden mt-1"}
-              [:input {:type "date"
-                       :value (str date)
-                       :class "text-sm rounded border-gray-300"
-                       :on-change (fn [e]
-                                    (let [new-date (t/date (-> e .-target .-value))]
-                                      (override-treatment-date! treatment-id occurrence-index new-date)
-                                      (reset! editing-date? false)))}]
+              [:f> date-picker {:value date
+                                :open-to-date date
+                                :class "text-sm"
+                                :on-change (fn [v]
+                                             (override-treatment-date! treatment-id occurrence-index (t/date v))
+                                             (reset! editing-date? false))}]
               [:button {:class "text-xs ml-1 text-gray-500 hover:text-red-500"
                         :on-click (fn [e]
                                     (.stopPropagation e)
@@ -233,7 +235,8 @@
            ^{:key (-> event meta :id)}
            [regimen-event-form
             (merge
-             event
+             (cond-> event
+               (= :treatment (:type event)) (update-in [:event :start] start-field))
              {:toggle-edit #(swap-state! update :editing? not)
               :on-change (fn [new-event]
                            (swap-state! (fn [old-event]

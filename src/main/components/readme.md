@@ -41,7 +41,8 @@ Uses a local Reagent atom `form-state` to hold in-progress edits. This is initia
 
 | Type | Widget | Behavior |
 |------|--------|----------|
-| default (text, date, number) | `<input>` | Standard HTML input; type passed through |
+| default (text, number) | `<input>` | Standard HTML input; type passed through |
+| `"date"` | `date-picker` (`react-date-picker`) | The calendar opens on the month of `:open-to-date` (a date or `yyyy-mm-dd`) if the field map has one, else on today's month; no clear button, and an incomplete typed date is never committed |
 | `"textarea"` | `<textarea>` | Multi-line text |
 | `"select"` | `<select>` | Dropdown; options from `:options` key |
 | `"pill-selector"` | Custom | Text input + Enter to add pills; X to remove |
