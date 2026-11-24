@@ -94,6 +94,12 @@ body {
     font-size: 16px;
 }
 
+.appointment-list {
+    border-left: 3px solid navy;
+    padding-left: 4px;
+    break-inside: avoid;
+}
+
 .parent-hover-visible {
     visibility: hidden;
 }

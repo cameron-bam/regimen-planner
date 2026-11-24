@@ -56,13 +56,13 @@ The `.cljc` files are shared between Clojure and ClojureScript, enabling the dat
 │   ├── [regimen-event-form] × N     ── one per event
 │   │   ├── edit mode: [regimen-event-input] per field
 │   │   └── view mode: [regimen-event-display]
-│   └── [plus-selector]              ── add Treatment / Medication / Footnote
+│   └── [plus-selector]              ── add Treatment / Medication / Appointment / Footnote
 └── Right panel (calendar)
     └── [calendar-month] × N         ── one per year-month
         ├── [calendar-year-month-label]
         ├── [calendar-weekday-label] × 7
         └── [calendar-day] × 28–42
-            └── [date-renderer]      ── medications grouped by timing
+            └── [date-renderer]      ── appointments, then medications grouped by timing
 ```
 
 The `main` component toggles between a split-panel layout (sidebar + calendar) and a full-screen calendar view.
@@ -83,7 +83,8 @@ expand-events
     ├── expand-medications
     │   ├── expand-timing          (one entry per timing label)
     │   ├── expand-exact-dates     (start/stop range → daily entries)
-    │   └── expand-relative-dates  (offset from treatment dates)
+    │   └── expand-relative-dates  (offset from treatment dates, every Nth occurrence)
+    ├── expand-appointments  (expand-exact-dates + expand-relative-dates; no timing)
     └── filter events with :date
     │
     ▼
@@ -93,7 +94,7 @@ group-by year-month
 calendar-month renders each month
     │
     ▼
-date-renderer displays medications + footnotes per day; treatment titles are clickable to override dates
+date-renderer displays appointments, medications + footnotes per day; treatment titles are clickable to override dates
 ```
 
 On page load the flow reverses: the URL hash is decoded from Base64, read through Transit, and used to initialize the state atom.
@@ -101,7 +102,7 @@ On page load the flow reverses: the URL hash is decoded from Base64, read throug
 ## State Shape
 
 ```clojure
-{:events   [{:type :medication   ;; or :treatment, :footnote
+{:events   [{:type :medication   ;; or :treatment, :appointment, :footnote
              :editing? false
              :event {:rx "..." :start #time/date "..." ...}
              ^{:id #uuid "..."}}  ;; metadata carries the unique ID
@@ -113,6 +114,8 @@ On page load the flow reverses: the URL hash is decoded from Base64, read throug
 Treatment events carry an additional `:date-overrides` field — a map from occurrence index (int) to `LocalDate` — that lets individual occurrences be rescheduled without changing the series parameters.
 
 A treatment's `:start` is a field map, `{:type "date" :value <LocalDate>}`, like the medication's `:exact/start`. Links saved before that hold a bare `LocalDate`; the form shows it as the same map and the next save stores the map. A date field map may carry `:open-to-date` (a date) for the month its calendar opens on; without it the calendar opens on today's month.
+
+Appointment events reuse the medication date fields: `:kind` (select, `"Labs"` or `"Visit"`), `:name` and `:time` (free text), `:related-treatment`, `:exact/start` (labelled "Date"), `:relative/start` (labelled "When") and `:every-nth` (number; keeps treatment occurrences 1, 1+N, …). The labels are stored in each field map's `:label`, which the form prefers over the label derived from the key. They have no `:timing`, so they never reach the Timing Order list.
 
 State is persisted bidirectionally with the URL hash using Cognitect Transit (with custom handlers for `tick` date types) and Base64 encoding. A Reagent watcher updates the hash on every state change.
 
@@ -172,4 +175,4 @@ The app is served as a fully static site at `https://cameron-bam.github.io/regim
 
 - **Tailwind utilities** handle most styling inline via class names
 - **Custom CSS** (`src/main/main.css`) defines the calendar grid (7-column CSS Grid), day cell sizing, alternating week shading, weekday header colors, and hover effects
-- **Print styles** (`@media print`) hide UI controls, reduce day cell height, and insert page breaks between months
+- **Print styles** (`@media print`) hide UI controls, reduce day cell height, and insert page breaks between months. Appointments are marked with a left border rather than a background, so the marker survives printing

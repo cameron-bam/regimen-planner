@@ -34,19 +34,33 @@
                                           :value #time/period "P14D"}
                               :date-overrides {}}
                       :editing? true}
+                     :appointment
+                     {:type :appointment
+                      :editing? true
+                      :event {:kind {:type :select :value "Labs" :options ["Labs" "Visit"]}
+                              :name ""
+                              :time ""
+                              :related-treatment {:type :select :value "" :options :state-tag/treatment-names}
+                              :exact/start {:type "date" :label "Date" :value (t/date (t/now)) :hidden? :state-tag/has-related-treatment?}
+                              :relative/start {:type "relative-time-period" :label "When" :value #time/period "-P0D" :hidden? :state-tag/not-has-related-treatment?}
+                              :every-nth {:type :number :label "Every Nth cycle" :value 1 :min 1 :hidden? :state-tag/not-has-related-treatment?}}}
                      :footnote
                      {:type :footnote
                       :editing? true
                       :event {:footnote {:type :textarea
                                          :value ""}}}})
 
-(def field-order [:rx
+(def field-order [:kind
+                  :name
+                  :time
+                  :rx
                   :timing
                   :related-treatment
                   :exact/start
                   :exact/stop
                   :relative/start
                   :relative/stop
+                  :every-nth
                   :footnote
                   :treatment
                   :start
@@ -138,13 +152,21 @@
       stop [(assoc event :date stop)]
       :else [event])))
 
+(defn every-nth-occurrence
+  [every-nth occurrences]
+  (let [n (max 1 (int (or (when-not (:hidden? every-nth) (:value every-nth)) 1)))]
+    (filter #(zero? (mod (:occurrence-index %) n)) occurrences)))
+
 (defn expand-relative-dates [events {:relative/keys [start stop] :as event}]
-  (let [event (dissoc event :relative/start :relative/stop)
-        related-treatments (filter #(= (str (-> % meta :id)) (-> event :related-treatment :value)) events)]
+  (let [every-nth (:every-nth event)
+        event (dissoc event :relative/start :relative/stop :every-nth)
+        related-treatments (->> events
+                                (filter #(= (str (-> % meta :id)) (-> event :related-treatment :value)))
+                                (every-nth-occurrence every-nth))]
     (if (seq related-treatments)
       (mapcat (fn [{% :date}]
-                (let [start (when-not (or (nil? %) (:hidden? start)) (t/>> % (:value start)))
-                      stop (when-not (or (nil? %) (:hidden? stop)) (t/>> % (:value stop)))]
+                (let [start (when-not (or (nil? %) (nil? start) (:hidden? start)) (t/>> % (:value start)))
+                      stop (when-not (or (nil? %) (nil? stop) (:hidden? stop)) (t/>> % (:value stop)))]
                   (prn [% start stop])
                   (cond
                     (and start stop) (mapv (fn [%] (assoc event :date %)) (date-range start (t/>> stop #time/period "P1D") #time/period "P1D"))
@@ -163,6 +185,15 @@
          vec)
     [event]))
 
+(defn expand-appointments [events event]
+  (if (= :appointment (:type event))
+    (->> [event]
+         (mapcat expand-exact-dates)
+         (mapcat (partial expand-relative-dates events))
+         (filter :date)
+         vec)
+    [event]))
+
 (defn expand-events []
   (let [events (->> @state!
                     :events
@@ -170,9 +201,16 @@
                     (map (fn [event] (assoc (merge event (:event event))
                                             :treatment-id (-> event meta :id))))
                     (mapcat expand-treatments))]
-    (mapcat (partial expand-medications events) events)))
+    (->> events
+         (mapcat (partial expand-medications events))
+         (mapcat (partial expand-appointments events)))))
 
-(defn date-renderer [{:keys [title events timing-order treatment-id occurrence-index date]}]
+(defn appointment->string
+  [{:keys [kind time name]}]
+  (let [when-text (str/join " " (remove str/blank? [(:value kind) (some-> time str/trim)]))]
+    (str/join " – " (remove str/blank? [when-text (some-> name str/trim)]))))
+
+(defn date-renderer [{:keys [title events appointments timing-order treatment-id occurrence-index date]}]
   (r/with-let [editing-date? (r/atom false)]
     (let [event-groups (group-by :timing events)]
       [:div {:class "p-2"}
@@ -197,6 +235,10 @@
                                     (reset! editing-date? false))}
                "Reset"]])]
           (or title [:br]))]
+       (when appointments
+         (into [:section {:class "appointment-list mb-3"}]
+               (map (fn [appointment] [:p {:class "mt-0 mb-0.5 leading-none"} (appointment->string appointment)]))
+               appointments))
        (when events
          (into [:div {:class "event-list"}]
                (comp
@@ -262,6 +304,8 @@
          :on-click #(swap! state! update :events conj (with-meta (:treatment default-events) {:id (random-uuid)}))}
         {:value "Add Medication"
          :on-click #(swap! state! update :events conj (with-meta (:medication default-events) {:id (random-uuid)}))}
+        {:value "Add Appointment"
+         :on-click #(swap! state! update :events conj (with-meta (:appointment default-events) {:id (random-uuid)}))}
         {:value "Add Footnote"
          :on-click #(swap! state! update :events conj (with-meta (:footnote default-events) {:id (random-uuid)}))}]]])
 
@@ -278,6 +322,7 @@
                                                          :medication (if (get-in acc [date :events])
                                                                        (update-in acc [date :events] conj event)
                                                                        (update acc date merge {:events [event] :timing-order (into [nil] (map :id) (-> @state! :timings))}))
+                                                         :appointment (update-in acc [date :appointments] (fnil conj []) event)
                                                          :treatment (update acc date merge {:title (:treatment event)
                                                                                             :treatment-id (:treatment-id event)
                                                                                             :occurrence-index (:occurrence-index event)

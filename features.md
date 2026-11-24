@@ -22,6 +22,13 @@ Regimen Planner is a web-based tool for building printable medication calendars.
 - Dependent medications with relative dates automatically recalculate when a treatment date is overridden
 - Changing a treatment's start date, frequency, or occurrence count prompts the user (via confirm dialog) to clear any existing date overrides
 
+### Appointments
+- Put clinic visits and lab draws on the calendar: kind (**Labs** or **Visit**), a name (e.g. "CBC + CMP") and an optional free-text time
+- **Relative to a treatment**: one offset (e.g. "1 day before", default day of treatment) applied to each cycle, optionally only **every Nth cycle** (cycles 1, 1+N, 1+2N, …)
+- **Exact date** when no treatment is picked
+- Relative appointments follow per-occurrence treatment date overrides, and deleting the treatment falls back to the exact date, as medications do
+- Shown in their own block above the medications in each day cell (e.g. "Labs 8:30 – CBC + CMP"), on screen and in print; not part of the Timing Order list
+
 ### Footnotes
 - Add explanatory notes that appear at the bottom of calendar pages with numbered markers (*, **, ***, etc.)
 
@@ -29,7 +36,7 @@ Regimen Planner is a web-based tool for building printable medication calendars.
 
 - Monthly calendar grid layout (Sunday–Saturday)
 - Automatically generates separate pages when events span multiple months
-- Medications displayed within each day cell, grouped by timing label
+- Appointments listed at the top of each day cell, medications below them grouped by timing label
 - Visual styling: alternating week shading, distinct weekend/weekday header colors, day numbers in each cell
 
 ## Timing Management
@@ -48,7 +55,7 @@ Regimen Planner is a web-based tool for building printable medication calendars.
 
 - **Split-panel view**: left sidebar for event management, right side for the calendar
 - **Full-screen toggle**: switch between split-panel and full-screen calendar views
-- **Add event menu**: floating "+" button with options to add a Treatment, Medication, or Footnote
+- **Add event menu**: floating "+" button with options to add a Treatment, Medication, Appointment, or Footnote
 - **Inline editing**: edit/save/delete controls on each event, with form fields specific to each event type (text inputs, date pickers, period inputs, pill selectors, dropdowns)
 
 ## Printing

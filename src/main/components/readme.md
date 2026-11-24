@@ -6,7 +6,7 @@
 
 ### Purpose
 
-A generic, data-driven form component that renders any event type (medication, treatment, or footnote) in either **edit mode** (input fields) or **view mode** (read-only display). It does not know which fields exist on a given event — it receives a `field-order` vector and renders whatever fields are present on the event in that order.
+A generic, data-driven form component that renders any event type (medication, treatment, appointment, or footnote) in either **edit mode** (input fields) or **view mode** (read-only display). It does not know which fields exist on a given event — it receives a `field-order` vector and renders whatever fields are present on the event in that order.
 
 ### Props
 
@@ -33,7 +33,7 @@ Uses a local Reagent atom `form-state` to hold in-progress edits. This is initia
    - **Edit mode:** dispatches to `regimen-event-input` (multimethod on `:type`)
    - **View mode:** dispatches to `regimen-event-display` (multimethod on `:type`)
 
-3. **Field type inference** — if a field value is a map, uses its `:type` key. If it's a `LocalDate`, uses `"date"`. Otherwise defaults to `"text"`.
+3. **Field type inference** — if a field value is a map, uses its `:type` key. If it's a `LocalDate`, uses `"date"`. Otherwise defaults to `"text"`. The label is derived from the field key unless the field map carries its own `:label` (appointments use this to show `:exact/start` as "Date" and `:relative/start` as "When").
 
 4. **Conditional visibility** — fields with `{:hidden? true}` (resolved from state tags) are skipped entirely.
 
@@ -67,5 +67,5 @@ In `regimen_planner.cljs`, the `main` component renders one `regimen-event-form`
 
 - `on-change` — merges saved form data back into the event in the state atom, then rebuilds timings. For treatment events, if `:start`, `:occurrences`, or `:frequency` changed and `:date-overrides` is non-empty, prompts the user with a confirm dialog before clearing overrides. If the user declines, the series change is also rejected.
 - `toggle-edit` — flips the `:editing?` flag on the event in state
-- `drop-event!` — removes the event and clears related-treatment references on dependent medications
+- `drop-event!` — removes the event and clears related-treatment references on dependent medications and appointments
 - `field-order` — a single shared vector used for all event types; fields not present on a given event are simply skipped
